@@ -5,6 +5,7 @@ module Replicant.Logging
   , apiCall
   , blog
   , bracket
+  , cacheHit
   , colorize
   , colorize'
   , newLogger
@@ -73,6 +74,15 @@ worker name msg = liftIO . T.putStrLn . T.concat $
   [ bracket Blue $ "supervisor:" <> name
   , " "
   , msg
+  ]
+
+cacheHit :: MonadIO m => BotName -> Text -> Text -> m ()
+cacheHit name coll key = blog name
+  [ colorize Blue "cache"
+  , " "
+  , coll
+  , ":"
+  , key
   ]
 
 colorize :: Color -> Text -> Text

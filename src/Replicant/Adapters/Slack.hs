@@ -1,5 +1,3 @@
--- TODO:
--- * cache userId => user and channelId => channel lookups
 module Replicant.Adapters.Slack
   ( adapter
   ) where
@@ -7,23 +5,25 @@ module Replicant.Adapters.Slack
 import Prelude hiding (takeWhile)
 import Replicant.Base
 
-import qualified Replicant.Adapters.Slack.Api as S
+import qualified Replicant.Adapters.Slack.Api   as S
 import qualified Replicant.Adapters.Slack.Types as S
 
-import           Data.Aeson           (eitherDecode)
+import           Data.Aeson               (eitherDecode)
 import           Data.Attoparsec.Text
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.List            as L
-import           Data.Maybe           (isJust)
-import qualified Data.Text            as T
-import qualified Data.Text.IO         as T
-import           Network.Socket       (withSocketsDo)
-import qualified Network.WebSockets   as WS
-import qualified Wuss                 as WS (runSecureClient)
+import qualified Data.ByteString.Lazy     as LBS
+import qualified Data.List                as L
+import           Data.Maybe               (isJust)
+import qualified Data.Text                as T
+import qualified Data.Text.IO             as T
+import qualified Database.Redis.Namespace as R
+import           Network.Socket           (withSocketsDo)
+import qualified Network.WebSockets       as WS
+import qualified Wuss                     as WS (runSecureClient)
 
-import Replicant.Bot          (botDirectives)
+import Replicant.Bot          (botDirectives, redis)
 import Replicant.Plugin
 import Replicant.Plugins.Base (whitespace)
+import qualified Replicant.Logging as Log
 
 
 adapter :: BotM e m => Adapter m
@@ -99,14 +99,33 @@ isDirect S.Message{..} = channelIsDirect && isFromAHuman
     isFromAHuman    = isJust messageUser -- TODO: improve?
 
 _sendToUser :: BotM e m => Bot -> User -> Text -> m ()
-_sendToUser bot User{..} text = do
-  rooms <- S.getImList bot
-  case snd <$> L.find (\(u,_) -> u == userId) rooms of
+_sendToUser bot User{..} text =
+  getDmRoomId bot userId >>= \case
     Nothing -> return () -- TODO??
     Just im -> S.sendMessage bot im text
 
 _sendToRoom ::  BotM e m => Bot -> Room -> Text -> m ()
 _sendToRoom bot Room{..} = S.sendMessage bot roomId
+
+-- TODO: support to- / from- json and cache room name => room lookup
+cached :: BotM e m => Bot -> Text -> Text -> m (Maybe Text) -> m (Maybe Text)
+cached bot collection key q = do
+  let rk = encodeUtf8 $ "cache:" <> collection <> ":" <> key
+  found <- redis $ R.get rk
+  case found of
+    Just val -> do
+      Log.cacheHit (botName bot) collection key
+      return . Just $ decodeUtf8 val
+    Nothing  -> q >>= \case
+      Nothing -> return Nothing
+      Just val -> do
+        redis . R.set rk $ encodeUtf8 val
+        return $ Just val
+
+getDmRoomId :: BotM e m => Bot -> UserId -> m (Maybe RoomId)
+getDmRoomId bot userId = cached bot "im-ids" userId $ do
+  rooms <- S.getImList bot
+  return $ snd <$> L.find (\(u,_) -> u == userId) rooms
 
 channelToRoom :: S.Channel -> Room
 channelToRoom ch = Room
