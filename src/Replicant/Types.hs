@@ -69,7 +69,7 @@ class (MonadError e m, MonadBaseControl IO m, MonadIO m) => BotM e m where
   redisPool      :: m Redis.Connection
   redisNamespace :: m ByteString
   redisError     :: Redis.Reply -> m a
-  runIO          :: m (m () -> IO ())
+  runIO          :: m (m a -> IO a)
 
 instance ToJSON Bot where
   toJSON Bot{..} = object

@@ -73,6 +73,7 @@ mkWorker name job = Worker
   <*> newTVarIO False
 
 -- TODO: restore logging
+-- - should this all run in a custom monad instead of IO?
 runWorker :: Worker -> IO ()
 runWorker w@Worker{..} = do
   thread <- forkFinally workerJob $ handleExit w

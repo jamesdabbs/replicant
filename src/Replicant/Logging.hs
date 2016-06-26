@@ -17,13 +17,14 @@ module Replicant.Logging
 import Replicant.Base
 
 import           Control.Exception          (SomeException)
+import           Control.Lens               ((^.))
 import           Data.Attoparsec.Lazy       (Result(..), parse)
 import           Data.Aeson                 (json')
 import           Data.Aeson.Encode.Pretty   (encodePretty)
 import           Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text                  as T
 import qualified Data.Text.IO               as T
-import           Network.Wreq               (Response)
+import           Network.Wreq               (Response, responseBody)
 import           System.Console.ANSI
 import           System.Log.FastLogger
 
@@ -46,9 +47,10 @@ handlerMatch Bot{..} msg = mapM_ l
       ]
 
 apiCall :: MonadIO m => BotName -> Text -> Response LBS.ByteString -> m ()
-apiCall bot endpoint _ = do
+apiCall bot endpoint resp = do
   blog bot [ colorize Red endpoint ]
-  -- liftIO . LBS.putStrLn . pprint $ resp ^. responseBody
+  when False $
+    liftIO . LBS.putStrLn . pprint $ resp ^. responseBody
 
 blog :: MonadIO m => BotName -> [Text] -> m ()
 blog bot msg = liftIO . T.putStrLn . T.concat $

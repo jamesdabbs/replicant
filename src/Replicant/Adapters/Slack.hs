@@ -38,14 +38,15 @@ adapter = Adapter
 
 _bootBot :: BotM e m => BotSpec m -> m ()
 _bootBot spec@BotSpec{..} = do
-  runner <- runIO
+  r1 <- runIO
+  r2 <- runIO
   void . liftIO . withSocketsDo $ do
-    url <- S.getWebsocket botRecord
+    url <- r1 $ S.getWebsocket botRecord
     let (domain, path) = T.breakOn "/" . T.drop 6 $ url
 
     WS.runSecureClient (T.unpack domain) 443 (T.unpack path) $ \conn -> do
       WS.forkPingThread conn 15
-      forever $ WS.receiveData conn >>= runner . dispatchEvents spec
+      forever $ WS.receiveData conn >>= r2 . dispatchEvents spec
 
 dispatchEvents :: BotM e m => BotSpec m -> LBS.ByteString -> m ()
 dispatchEvents spec msg = case eitherDecode msg of
@@ -97,14 +98,14 @@ isDirect S.Message{..} = channelIsDirect && isFromAHuman
     channelIsDirect = T.isPrefixOf "D" messageChannel
     isFromAHuman    = isJust messageUser -- TODO: improve?
 
-_sendToUser :: MonadIO m => Bot -> User -> Text -> m ()
+_sendToUser :: BotM e m => Bot -> User -> Text -> m ()
 _sendToUser bot User{..} text = do
-  roomId <- getImRoomId userId
-  S.sendMessage bot roomId text
-  where
-    getImRoomId = error "getImRoomId"
+  rooms <- S.getImList bot
+  case snd <$> L.find (\(u,_) -> u == userId) rooms of
+    Nothing -> return () -- TODO??
+    Just im -> S.sendMessage bot im text
 
-_sendToRoom :: MonadIO m => Bot -> Room -> Text -> m ()
+_sendToRoom ::  BotM e m => Bot -> Room -> Text -> m ()
 _sendToRoom bot Room{..} = S.sendMessage bot roomId
 
 channelToRoom :: S.Channel -> Room
@@ -113,12 +114,12 @@ channelToRoom ch = Room
   , roomName = S.channelName ch
   }
 
-getSlackRoomByName :: MonadIO m => Bot -> Text -> m (Maybe Room)
+getSlackRoomByName :: BotM e m => Bot -> Text -> m (Maybe Room)
 getSlackRoomByName bot text = do
   channels <- S.getChannels bot
   return $ channelToRoom <$> L.find (\c -> text == S.channelName c) channels
 
-getSlackRoomMembers :: MonadIO m => Bot -> Room -> m [User]
+getSlackRoomMembers :: BotM e m => Bot -> Room -> m [User]
 getSlackRoomMembers bot Room{..} = do
   members <- S.getChannelMembers bot roomId
   return $ map memberToUser members
