@@ -12,9 +12,11 @@ module Replicant
   , BotSpec(..)
   , Plugin
   , Supervisor
+  , WorkerStatus(..)
   , buildBot
   , newSupervisor
   , redis
+  , status
   , startBot
   , stopBot
   -- plugins

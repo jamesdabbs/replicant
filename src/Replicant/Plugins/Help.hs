@@ -9,10 +9,10 @@ import Replicant.Plugin (BotSpec(..), handlerCommandOnly, handlerExamples)
 
 import qualified Data.Text as T
 
-help :: BotM e m => Plugin m
+help :: Replicant e m => Plugin m
 help = Plugin "help" [helpH]
 
-helpH :: BotM e m => Handler m
+helpH :: Replicant e m => Handler m
 helpH = mkHandler "help" True (string "help")
   [ Example "help" "Show this help message"
   ] $ \_ -> do

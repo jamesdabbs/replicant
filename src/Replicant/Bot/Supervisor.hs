@@ -1,6 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Replicant.Bot.Supervisor
   ( Supervisor
-  , WorkerState(..)
   , WorkerStatus(..)
   , newSupervisor
   , monitor
@@ -8,86 +8,69 @@ module Replicant.Bot.Supervisor
   , status
   ) where
 
-import           Control.Concurrent          (ThreadId, forkFinally, killThread)
+import           Control.Concurrent          (ThreadId, killThread)
+import           Control.Concurrent.Lifted   (forkFinally)
 import           Control.Concurrent.STM      (STM, atomically)
 import           Control.Concurrent.STM.TVar
 import           Control.Exception           (SomeException)
 import           Control.Monad               (void)
+import           Control.Monad.IO.Class      (MonadIO, liftIO)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map                    as M
-import qualified Data.Text                   as T
 
--- import           Replicant.Base
-
-data Worker = Worker
-  { workerJob        :: IO ()
-  , workerName       :: T.Text
-  , workerExited     :: TVar (Either SomeException Bool)
-  , workerThread     :: TVar (Maybe ThreadId)
-  , workerTerminator :: TVar Bool
+data Worker m = Worker
+  { workerJob    :: m ()
+  , workerStatus :: TVar WorkerStatus
   }
 
-data Supervisor a = Supervisor
-  { supervisorWorkers :: TVar (M.Map a Worker)
+data Supervisor m a = Supervisor
+  { supervisorWorkers :: TVar (M.Map a (Worker m))
   }
 
-data WorkerState = WorkerRunning | WorkerCrashed | WorkerDone
+data WorkerStatus = WorkerBooting | WorkerRunning ThreadId | WorkerCrashed SomeException | WorkerDone deriving Show
 
-data WorkerStatus = WorkerStatus
-  { wsThread :: Maybe ThreadId
-  , wsError  :: Maybe SomeException
-  , wsState  :: WorkerState
-  }
-
-newSupervisor :: IO (Supervisor a)
+newSupervisor :: IO (Supervisor m a)
 newSupervisor = Supervisor <$> newTVarIO M.empty
 
-monitor :: Ord a => Supervisor a -> T.Text -> a -> IO b -> IO ()
-monitor s@Supervisor{..} name key job = do
+monitor :: (MonadBaseControl IO m, MonadIO m, Ord a)
+        => Supervisor m a -> (WorkerStatus -> m c) -> a -> m b -> m ()
+monitor s@Supervisor{..} cb key job = do
   halt s key
-  w <- mkWorker name job
-  atomically . modifyTVar supervisorWorkers $ M.insert key w
-  runWorker w
+  w <- mkWorker job
+  liftIO . atomically . modifyTVar supervisorWorkers $ M.insert key w
+  runWorker w $ \st -> void $ do
+    liftIO . atomically $ writeTVar (workerStatus w) st
+    cb st
 
-halt :: Ord a => Supervisor a -> a -> IO ()
-halt Supervisor{..} key =
-  (atomically $ pop key supervisorWorkers) >>= mapM_ shutdownWorker
+halt :: (MonadIO m, Ord a) => Supervisor m a -> a -> m ()
+halt Supervisor{..} key = do
+  keys <- liftIO . atomically $ pop key supervisorWorkers
+  mapM_ shutdownWorker keys
 
-status :: Supervisor a -> IO (M.Map a WorkerStatus)
-status Supervisor{..} = atomically $
-  readTVar supervisorWorkers >>= mapM getWorkerStatus
+status :: MonadIO m => Supervisor m a -> m (M.Map a WorkerStatus)
+status Supervisor{..} = liftIO . atomically $
+  readTVar supervisorWorkers >>= mapM (readTVar . workerStatus)
 
-getWorkerStatus :: Worker -> STM WorkerStatus
-getWorkerStatus Worker{..} = do
-  t <- readTVar workerThread
-  readTVar workerExited >>= \case
-    Left     ex -> return $ WorkerStatus t (Just ex) WorkerCrashed
-    Right False -> return $ WorkerStatus t   Nothing WorkerRunning
-    Right  True -> return $ WorkerStatus t   Nothing WorkerDone
-
-mkWorker :: T.Text -> IO b -> IO Worker
-mkWorker name job = Worker
+mkWorker :: MonadIO m => m b -> m (Worker m)
+mkWorker job = liftIO $ Worker
   <$> pure (void job)
-  <*> pure name
-  <*> newTVarIO (Right False)
-  <*> newTVarIO Nothing
-  <*> newTVarIO False
+  <*> newTVarIO WorkerBooting
 
--- TODO: restore logging
--- - should this all run in a custom monad instead of IO?
-runWorker :: Worker -> IO ()
-runWorker w@Worker{..} = do
-  thread <- forkFinally workerJob $ handleExit w
-  atomically . writeTVar workerThread $ Just thread
+runWorker :: (MonadBaseControl IO m, MonadIO m) => Worker m -> (WorkerStatus -> m ()) -> m ()
+runWorker Worker{..} watcher = do
+  watcher WorkerBooting
+  thread <- forkFinally workerJob (handleExit watcher)
+  watcher $ WorkerRunning thread
 
--- TODO: check workerTerminator and exception to decide if we should try to reboot
-handleExit :: Worker -> Either SomeException () -> IO ()
-handleExit Worker{..} exit = do
-  atomically . writeTVar workerExited $ const True <$> exit
+-- TODO: can we determine if this was a deliberate shutdown? Should we try to reboot?
+handleExit :: MonadIO m => (WorkerStatus -> m c) -> Either SomeException () -> m c
+handleExit watcher (Left err) = watcher $ WorkerCrashed err
+handleExit watcher _ = watcher WorkerDone
 
-shutdownWorker :: Worker -> IO ()
-shutdownWorker Worker{..} = do
-  atomically $ writeTVar workerTerminator True
-  readTVarIO workerThread >>= mapM_ killThread
+shutdownWorker :: MonadIO m => Worker m -> m ()
+shutdownWorker Worker{..} = liftIO $ readTVarIO workerStatus >>= \case
+  WorkerRunning threadId -> killThread threadId
+  _ -> return ()
 
 pop :: Ord a => a -> TVar (M.Map a b) -> STM (Maybe b)
 pop k tmap = do

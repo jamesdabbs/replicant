@@ -9,23 +9,22 @@ import qualified Replicant.Adapters.CLI as CLI
 
 import Control.Monad        (void)
 import Control.Monad.Except (throwError)
-import Control.Monad.Reader (asks)
+import Control.Monad.Reader (asks, liftIO)
 import qualified Database.Redis.Namespace as R
+
+type B = ReplicantT AppError AppConf IO
 
 data AppConf = AppConf
   { connection :: R.Connection
-  , working    :: Supervisor BotId
+  , working    :: Supervisor B BotId
   }
 
 data AppError = RedisError | OtherError deriving Show
 
-type B = ReplicantT AppError AppConf IO
-
-instance BotM AppError B where
+instance Replicant AppError B where
   redisPool      = asks connection
   redisNamespace = return "replicant"
   redisError _   = throwError RedisError
-  botSupervisor  = asks working
 
 runB :: AppConf -> B a -> IO (Either AppError a)
 runB = runReplicantT
@@ -48,8 +47,7 @@ mkConf = AppConf <$> R.connect R.defaultConnectInfo <*> newSupervisor
 main :: IO ()
 main = do
   conf <- mkConf
-  let runner = runB conf
-  result <- runner $ do
-    startBot (void . runner) $ buildBot CLI.adapter plugins bot
+  result <- runB conf $ do
+    startBot (working conf) (liftIO . print) (buildBot CLI.adapter plugins bot)
     CLI.wait
   either (error . show) return result

@@ -6,10 +6,10 @@ import           Replicant.Plugins.Base
 import           Data.Attoparsec.Text
 import qualified Data.Text as T
 
-divide :: BotM e m => Plugin m
+divide :: Replicant e m => Plugin m
 divide = Plugin "divide" [divideH]
 
-divideH :: BotM e m => Handler m
+divideH :: Replicant e m => Handler m
 divideH = mkHandler "divide" True divParser
   [ Example "10 / 2" "Do some math"
   , Example "1 / 0" "Force a crash"

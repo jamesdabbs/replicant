@@ -2,13 +2,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Replicant.Types
   ( Bot(..)
-  , BotM(..)
   , BotId
   , BotInfo(..)
   , BotName
   , BotToken
   , Message(..)
   , Namespace
+  , Replicant(..)
   , Room(..)
   , RoomId
   , UserId
@@ -22,8 +22,6 @@ import           Data.Aeson
 import           Data.Text                    (Text)
 import           Data.ByteString              (ByteString)
 import qualified Database.Redis               as Redis
-
-import Replicant.Bot.Supervisor
 
 type BotId = Text
 type RoomId = Text
@@ -64,12 +62,10 @@ data BotInfo = BotInfo
   , botInfoIcon  :: Text
   }
 
-class (MonadError e m, MonadBaseControl IO m, MonadIO m) => BotM e m where
-  botSupervisor  :: m (Supervisor BotId)
+class (MonadError e m, MonadBaseControl IO m, MonadIO m) => Replicant e m where
   redisPool      :: m Redis.Connection
   redisNamespace :: m ByteString
   redisError     :: Redis.Reply -> m a
-  runIO          :: m (m a -> IO a)
 
 instance ToJSON Bot where
   toJSON Bot{..} = object

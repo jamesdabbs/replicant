@@ -9,11 +9,11 @@ import qualified Data.Text                as T
 import qualified Database.Redis.Namespace as R
 
 
-score :: BotM e m => Plugin m
+score :: Replicant e m => Plugin m
 score = Plugin "score" [scoreUp, scoreDown, scoreShow]
 
 
-scoreShow, scoreUp, scoreDown :: BotM e m => Handler m
+scoreShow, scoreUp, scoreDown :: Replicant e m => Handler m
 
 scoreShow = mkHandler "Show score" False ("score " *> word)
   [ Example "score leeloo" "Show the score for leeloo"]
@@ -28,7 +28,7 @@ scoreDown = mkHandler "Lower score" False (word <* "--")
   $ \term -> delta term (-1)
 
 
-delta :: BotM e m => Text -> Integer -> H m ()
+delta :: Replicant e m => Text -> Integer -> H m ()
 delta term dn = redis (R.incrby term' dn) >>= explain term
   where term' = encodeUtf8 term
 

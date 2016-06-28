@@ -8,23 +8,24 @@ module Replicant.Bot
   ) where
 
 import           Replicant.Base
-import           Replicant.Bot.Supervisor (halt, monitor)
+import           Replicant.Bot.Supervisor (Supervisor, WorkerStatus, halt, monitor)
 import           Replicant.Plugin
 import qualified Replicant.Logging as Log
 
-import           Control.Exception.Lifted (try)
-import qualified Data.List                as L
-import qualified Database.Redis           as R (Redis, Reply)
-import           Database.Redis.Namespace (RedisNS, runRedisNS)
+import           Control.Exception.Lifted    (try)
+import           Control.Monad.Trans.Control (control)
+import qualified Data.List                   as L
+import qualified Database.Redis              as R (Redis, Reply)
+import           Database.Redis.Namespace    (RedisNS, runRedisNS)
 
-redis :: BotM e m => RedisNS R.Redis (Either R.Reply) a -> m a
+redis :: Replicant e m => RedisNS R.Redis (Either R.Reply) a -> m a
 redis q = do
   conn <- redisPool
   ns   <- redisNamespace
   res  <- liftIO $ runRedisNS conn ns q
   either redisError return res
 
-botDirectives :: BotM e m => BotSpec m -> Message -> m ()
+botDirectives :: Replicant e m => BotSpec m -> Message -> m ()
 botDirectives b msg = do
   let applicable = L.filter (\p -> handlerApplies p b msg) (botHandlers b)
 
@@ -47,13 +48,8 @@ tryRun h b m = do
 buildBot :: Adapter m -> [Plugin m] -> Bot -> BotSpec m
 buildBot botAdapter botPlugins botRecord = BotSpec{..}
 
-startBot :: BotM e m => (m () -> IO ()) -> BotSpec m -> m ()
-startBot runner spec@BotSpec{..} = do
-  let Bot{..} = botRecord
-  supervisor <- botSupervisor
-  liftIO $ monitor supervisor botName botId (runner $ bootBot botAdapter spec)
+startBot :: Replicant e m => Supervisor m BotId -> (WorkerStatus -> m c) -> BotSpec m -> m ()
+startBot supervisor cb spec@BotSpec{..} = monitor supervisor cb (botId botRecord) (bootBot botAdapter spec)
 
-stopBot :: BotM e m => BotId -> m ()
-stopBot _id = do
-  supervisor <- botSupervisor
-  liftIO $ halt supervisor _id
+stopBot :: Replicant e m => Supervisor m BotId -> BotId -> m ()
+stopBot = halt

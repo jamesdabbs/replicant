@@ -6,7 +6,7 @@ module Replicant.Base
 import Control.Applicative          as Replicant.Base (optional, many)
 import Control.Concurrent           as Replicant.Base (ThreadId)
 import Control.Monad                as Replicant.Base (MonadPlus, forever, forM, forM_, join, liftM2, mzero, unless, void, when, (>=>))
-import Control.Monad.Error          as Replicant.Base (MonadError, throwError)
+import Control.Monad.Except         as Replicant.Base (MonadError, throwError)
 import Control.Monad.Logger         as Replicant.Base (MonadLogger, logDebug, logError, logInfo, logWarn, toLogStr)
 import Control.Monad.Reader         as Replicant.Base (MonadReader, asks, ask)
 import Control.Monad.IO.Class       as Replicant.Base (MonadIO)

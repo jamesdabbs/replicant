@@ -22,6 +22,7 @@ module Replicant.Plugin
   ) where
 
 import Replicant.Base
+import Replicant.Bot.Supervisor
 
 import           Control.Monad.Reader        (ReaderT, runReaderT, lift)
 import           Data.Attoparsec.Text        (Parser, parseOnly)
@@ -39,8 +40,7 @@ data HandlerCtx m = HandlerCtx
   }
 type H m a = ReaderT (HandlerCtx m) m a
 
-instance BotM e m => BotM e (ReaderT (HandlerCtx m) m) where
-  botSupervisor  = lift botSupervisor
+instance Replicant e m => Replicant e (ReaderT (HandlerCtx m) m) where
   redisPool      = lift redisPool
   redisError     = lift . redisError
   redisNamespace = do
@@ -116,7 +116,7 @@ handlerCommandOnly = handlerCommand
 runHandler :: Monad m => Handler m -> BotSpec m -> Message -> m ()
 runHandler = handlerRun
 
-mkHandler :: BotM e m
+mkHandler :: Replicant e m
           => Text
           -> Bool
           -> Parser a
@@ -131,7 +131,7 @@ mkHandler name commandOnly parser examples handler = Handler
   , handlerRun      = withCommand . runParser parser $ run handler
   }
   where
-    run :: BotM e m => (a -> H m ()) -> BotSpec m -> Message -> a -> m ()
+    run :: Replicant e m => (a -> H m ()) -> BotSpec m -> Message -> a -> m ()
     run h b msg a = do
       conn <- redisPool
       let

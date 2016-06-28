@@ -22,10 +22,10 @@ import           Network.Wreq         (FormParam, postWith, defaults, param, res
 
 import Data.Aeson (Value)
 
-replyTo :: BotM e m => Bot -> S.Message -> Text -> m ()
+replyTo :: Replicant e m => Bot -> S.Message -> Text -> m ()
 replyTo bot S.Message{..} = sendMessage bot messageChannel
 
-sendMessage :: BotM e m => Bot -> S.ChannelId -> Text -> m ()
+sendMessage :: Replicant e m => Bot -> S.ChannelId -> Text -> m ()
 sendMessage Bot{..} channel body = do
   resp <- slackRequest botName botToken "chat.postMessage" $
     \p -> p & param "channel"     .~ [channel]
@@ -35,12 +35,12 @@ sendMessage Bot{..} channel body = do
             & param "icon_emoji"  .~ [botIcon]
   return ()
 
-getWebsocket :: BotM e m => Bot -> m Text
+getWebsocket :: Replicant e m => Bot -> m Text
 getWebsocket Bot{..} = do
   r <- slackRequest botName botToken "rtm.start" id
   return $ r ^. responseBody . key "url" . _String
 
-getBotInfo :: BotM e m => BotInfo -> m Bot
+getBotInfo :: Replicant e m => BotInfo -> m Bot
 getBotInfo BotInfo{..} = do
   r <- slackRequest "??" botInfoToken "auth.test" id
   let k str = r ^. responseBody . key str . _String
@@ -52,17 +52,17 @@ getBotInfo BotInfo{..} = do
       botId     = "slack:" <> teamId <> ":" <> botUserId
   return Bot{..}
 
-getChannels :: BotM e m => Bot -> m [S.Channel]
+getChannels :: Replicant e m => Bot -> m [S.Channel]
 getChannels Bot{..} = do
   error "FIXME: getChannels"
   return []
 
-getChannelMembers :: BotM e m => Bot -> Text -> m [S.User]
+getChannelMembers :: Replicant e m => Bot -> Text -> m [S.User]
 getChannelMembers _ _ = do
   error "FIXME: getChannelMembers"
   return []
 
-getImList :: BotM e m => Bot -> m [(UserId, RoomId)]
+getImList :: Replicant e m => Bot -> m [(UserId, RoomId)]
 getImList Bot{..} = do
   r <- slackRequest botName botToken "im.list" id
   let rooms = r ^.. responseBody . key "ims" . _Array . traverse
@@ -74,7 +74,7 @@ parseImRoom v =
   , v ^. key   "id" . _String
   )
 
-oauth :: BotM e m => S.Credentials -> Text -> m (BotToken, BotToken)
+oauth :: Replicant e m => S.Credentials -> Text -> m (BotToken, BotToken)
 oauth S.Credentials{..} code = do
   let opts = defaults
            & param "client_id"     .~ [appClientId]
@@ -88,7 +88,7 @@ oauth S.Credentials{..} code = do
       bot  = r ^. responseBody . key "bot" . key "bot_access_token" . _String
   return (user, bot)
 
-slackRequest :: BotM e m => BotName -> BotToken -> Text -> (Options -> Options) -> m (Response LBS.ByteString)
+slackRequest :: Replicant e m => BotName -> BotToken -> Text -> (Options -> Options) -> m (Response LBS.ByteString)
 slackRequest name token endpoint updater = do
   let opts = defaults
            & param "token" .~ [token]

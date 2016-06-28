@@ -20,7 +20,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 
 import Replicant.Plugin
 
-adapter :: BotM e m => Adapter m
+adapter :: Replicant e m => Adapter m
 adapter = Adapter
   { bootBot        = _bootBot
   , sendToUser     = _sendUser
@@ -38,7 +38,7 @@ wait :: MonadIO m => m ()
 {-# NOINLINE wait #-}
 wait = liftIO $ takeMVar done
 
-_bootBot :: BotM e m => BotSpec m -> m ()
+_bootBot :: Replicant e m => BotSpec m -> m ()
 _bootBot spec@BotSpec{..} = do
   let Bot{..} = botRecord
   let
@@ -52,7 +52,7 @@ _bootBot spec@BotSpec{..} = do
         else dispatch spec input >> loop
   loop
 
-dispatch :: BotM e m => BotSpec m -> Text -> m ()
+dispatch :: Replicant e m => BotSpec m -> Text -> m ()
 dispatch spec input = case parseOnly messageParser input of
   Left  err -> liftIO . putStrLn $ "Could not parse input: " ++ err
   Right msg -> botDirectives spec msg
