@@ -30,7 +30,7 @@ import qualified Replicant.Logging as Log
 adapter :: Replicant e m => Adapter m
 adapter = Adapter
   { bootBot        = _bootBot
-  , sendToUser     = _sendToUser
+  , sendToUserId   = _sendToUserId
   , sendToRoom     = _sendToRoom
   , parseCommand   = parseSlackCommand
   , getRoomByName  = getSlackRoomByName
@@ -97,8 +97,8 @@ isDirect S.Message{..} = channelIsDirect && isFromAHuman
     channelIsDirect = T.isPrefixOf "D" messageChannel
     isFromAHuman    = isJust messageUser -- TODO: improve?
 
-_sendToUser :: Replicant e m => Bot -> User -> Text -> m ()
-_sendToUser bot User{..} text =
+_sendToUserId :: Replicant e m => Bot -> UserId -> Text -> m ()
+_sendToUserId bot userId text =
   getDmRoomId bot userId >>= \case
     Nothing -> return () -- TODO??
     Just im -> S.sendMessage bot im text

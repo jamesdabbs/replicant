@@ -19,13 +19,13 @@ module Replicant.Plugin
   , handlerName
   , pluginExamples
   , runHandler
+  , sendToUser
   ) where
 
 import Replicant.Base
-import Replicant.Bot.Supervisor
 
 import           Control.Monad.Reader        (ReaderT, runReaderT, lift)
-import           Data.Attoparsec.Text        (Parser, parseOnly)
+import           Data.Attoparsec.Text        (Parser, parseOnly, endOfInput)
 import           Data.ByteString             (ByteString)
 import           Data.List                   (find)
 import           Data.Maybe                  (isNothing)
@@ -89,15 +89,18 @@ data BotSpec m = BotSpec
 data Adapter m = Adapter
   { bootBot        :: BotSpec m -> m ()
   , sendToRoom     :: Bot -> Room -> Text -> m ()
-  , sendToUser     :: Bot -> User -> Text -> m ()
+  , sendToUserId   :: Bot -> UserId -> Text -> m ()
   , parseCommand   :: Bot -> Message -> Maybe Text
   , getRoomByName  :: Bot -> Text -> m (Maybe Room)
   , getRoomMembers :: Bot -> Room -> m [User]
   }
 
+sendToUser :: Adapter m -> Bot -> User -> Text -> m ()
+sendToUser a b User{..} = sendToUserId a b userId
+
 checkParser :: Parser a -> BotSpec m -> Message -> Maybe ()
 checkParser parser _ Message{..} =
-  case parseOnly parser messageText of
+  case parseOnly (parser <* endOfInput) messageText of
     Right _ -> Nothing
     Left  _ -> Just ()
 

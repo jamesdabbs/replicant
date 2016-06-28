@@ -19,6 +19,7 @@ module Replicant.Plugins.Base
   , reply
   , sendToRoom
   , sendToUser
+  , sendToUserId
   , whitespace
   , word
   ) where
@@ -60,6 +61,9 @@ reply text = do
 
 sendToUser :: Monad m => User -> Text -> H m ()
 sendToUser = liftH2 P.sendToUser
+
+sendToUserId :: Monad m => UserId -> Text -> H m ()
+sendToUserId = liftH2 P.sendToUserId
 
 sendToRoom :: Monad m => Room -> Text -> H m ()
 sendToRoom = liftH2 P.sendToRoom

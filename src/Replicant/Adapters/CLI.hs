@@ -10,7 +10,7 @@ import qualified Replicant.Logging      as Log
 
 import           Control.Concurrent.MVar
 import           Data.Attoparsec.Text
-import           Data.Maybe     (isJust)
+import           Data.Maybe     (isJust, fromJust)
 import qualified Data.List      as L
 import qualified Data.Text      as T
 import qualified Data.Text.IO   as T
@@ -23,7 +23,7 @@ import Replicant.Plugin
 adapter :: Replicant e m => Adapter m
 adapter = Adapter
   { bootBot        = _bootBot
-  , sendToUser     = _sendUser
+  , sendToUserId   = _sendUserId
   , sendToRoom     = _sendRoom
   , parseCommand   = _parseCommand
   , getRoomByName  = _getRoomByName
@@ -80,8 +80,10 @@ _ask botName target = _log
   , " < "
   ]
 
-_sendUser :: MonadIO m => Bot -> User -> Text -> m ()
-_sendUser Bot{..} User{..} = _send botName $ Log.bracket userC userName
+_sendUserId :: MonadIO m => Bot -> UserId -> Text -> m ()
+_sendUserId Bot{..} _id = _send botName $ Log.bracket userC name
+  where
+    name = userName . fromJust $ L.find (\u -> userId u == _id) users
 
 _sendRoom :: MonadIO m => Bot -> Room -> Text -> m ()
 _sendRoom Bot{..} Room{..} = _send botName $ Log.bracket roomC roomName
@@ -135,6 +137,9 @@ commandParser Bot{..} = do
 me, you :: User
 me  = User "1" "me"
 you = User "2" "you"
+
+users :: [User]
+users = [me, you]
 
 here, there :: Room
 here  = Room "A" "here"
