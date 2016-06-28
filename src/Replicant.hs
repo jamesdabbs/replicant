@@ -39,6 +39,7 @@ import Replicant.Plugins.Help
 import Replicant.Plugins.Score
 
 import Control.Monad.Base
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Control
 import Control.Monad.Trans.Except (runExceptT)
@@ -56,6 +57,12 @@ newtype ReplicantT e c m a = ReplicantT
   )
 
 deriving instance MonadBase b m => MonadBase b (ReplicantT e c m)
+
+instance MonadCatch m => MonadCatch (ReplicantT e c m) where
+  catch (ReplicantT m) f = ReplicantT $ m `catch` (unReplicantT . f)
+
+instance MonadThrow m => MonadThrow (ReplicantT e c m) where
+  throwM = ReplicantT . throwM
 
 instance MonadTrans (ReplicantT e c) where
   lift = ReplicantT . lift . lift
